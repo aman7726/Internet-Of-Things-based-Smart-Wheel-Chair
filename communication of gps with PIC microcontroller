@@ -1,0 +1,72 @@
+#include<pic18f4550.h>
+#include<string.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include "Configuration_Header_File.h"
+#include "LCD_20x4_H_file.h"
+#include "USART_Header_File.h"
+
+unsigned long int get_gpstime();
+float get_latitude(unsigned char);
+float get_longitude(unsigned char);
+float get_altitude(unsigned char);
+void convert_time_to_UTC(unsigned long int);
+float convert_to_degrees(float);
+
+#define GGA_Buffer_Size 80
+#define GGA_Pointers_Size 20
+
+char GGA_Buffer[GGA_Buffer_Size];              /* to store GGA string */
+char GGA_CODE[3];
+
+unsigned char N_S, E_W;                        /* for getting direction polarity */
+unsigned char GGA_Pointers[GGA_Pointers_Size]; /* to store instances of ',' */
+char CommaCounter;
+char Data_Buffer[15];
+volatile unsigned int GGA_Index;
+volatile unsigned char	IsItGGAString	= 0;
+
+void main(void) {
+	unsigned long int Time;
+	float Latitude,Longitude,Altitude;
+	char GPS_Buffer[15];
+    
+    OSCCON = 0x72;      /* use internal osc. of 8MHz Freq. */
+	LCD_Init();
+    INTCONbits.GIE=1;   /* enable Global Interrupt */
+    INTCONbits.PEIE=1;  /* enable Peripheral Interrupt */
+    PIE1bits.RCIE=1;    /* enable Receive Interrupt */
+	USART_Init(9600);
+	
+    while(1){
+	memset(GPS_Buffer,0,15);
+	LCD_String_xy(1,0,"UTC Time: ");
+    Time = get_gpstime();            /* Extract Time */
+	convert_time_to_UTC(Time);       /* convert time to UTC */
+	LCD_String(Data_Buffer);
+	LCD_String("  ");
+		
+	LCD_String_xy(2,0,"Lat: ");
+	Latitude = get_latitude(GGA_Pointers[0]); /* Extract Latitude */
+	Latitude = convert_to_degrees(Latitude);  /* convert raw latitude in degree decimal*/
+	sprintf(GPS_Buffer,"%.05f",Latitude);			/* convert float value to string */
+	LCD_String(GPS_Buffer);            				/* display latitude in degree */
+	memset(GPS_Buffer,0,15);
+		
+	LCD_String_xy(3,0,"Long: ");
+	Longitude = get_longitude(GGA_Pointers[2]);/* Extract Latitude */
+	Longitude = convert_to_degrees(Longitude);/* convert raw longitude in degree decimal*/
+	sprintf(GPS_Buffer,"%.05f",Longitude);		/* convert float value to string */
+	LCD_String(GPS_Buffer);            				/* display latitude in degree */
+	memset(GPS_Buffer,0,15);
+			
+	LCD_String_xy(4,0,"Alt: ");
+	Altitude = get_altitude(GGA_Pointers[7]); /* Extract Latitude */
+	sprintf(GPS_Buffer,"%.2f",Altitude);			/* convert float value to string */
+	LCD_String(GPS_Buffer);            				/* display latitude in degree */
+
+	}
+}
+
+unsigned long int get_gpstime(){
+	unsigned char index;
